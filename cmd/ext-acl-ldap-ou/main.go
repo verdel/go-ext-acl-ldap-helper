@@ -172,20 +172,26 @@ func doRequest(id, username string, searchEntity string) {
 		} else {
 			log.Printf("[WARN] Exception during execution of the LDAP query. Message - %s", err.Error())
 		}
-	}
 
-	if len(sr.Entries) > 0 {
-		if id == "" {
-			addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
-		} else {
-			addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
-		}
-
-	} else {
 		if id == "" {
 			addResponse(fmt.Sprintf("ERR"))
 		} else {
 			addResponse(fmt.Sprintf("%s ERR", id))
+		}
+	} else {
+		if len(sr.Entries) > 0 {
+			if id == "" {
+				addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
+			} else {
+				addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
+			}
+
+		} else {
+			if id == "" {
+				addResponse(fmt.Sprintf("ERR"))
+			} else {
+				addResponse(fmt.Sprintf("%s ERR", id))
+			}
 		}
 	}
 }

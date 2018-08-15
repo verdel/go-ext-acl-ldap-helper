@@ -172,40 +172,60 @@ func doRequest(id, username string, searchEntity string) {
 		} else {
 			log.Printf("[WARN] Exception during execution of the LDAP query. Message - %s", err.Error())
 		}
-	}
 
-	if len(sr.Entries) == 1 {
-		r := strings.NewReplacer("%u", sr.Entries[0].DN,
-			"%g", searchEntity)
+		if id == "" {
+			addResponse(fmt.Sprintf("ERR"))
+		} else {
+			addResponse(fmt.Sprintf("%s ERR", id))
+		}
+	} else {
+		if len(sr.Entries) == 1 {
+			r := strings.NewReplacer("%u", sr.Entries[0].DN,
+				"%g", searchEntity)
 
-		searchRequest := ldap.NewSearchRequest(
-			opts.BaseDN,
-			ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-			r.Replace(opts.GroupFilter),
-			[]string{"sAMAccountName"},
-			nil,
-		)
+			searchRequest := ldap.NewSearchRequest(
+				opts.BaseDN,
+				ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
+				r.Replace(opts.GroupFilter),
+				[]string{"sAMAccountName"},
+				nil,
+			)
 
-		sr, err = conn.Search(searchRequest)
-		if len(sr.Entries) > 0 {
-			if id == "" {
-				addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
+			sr, err = conn.Search(searchRequest)
+			if err != nil {
+				if ldap.IsErrorWithCode(err, ldap.LDAPResultNoSuchObject) {
+					log.Printf("[WARN] Exception during execution of the LDAP query. User '%s' is not found in domain. Using LDAP path - %s", username, opts.BaseDN)
+				} else {
+					log.Printf("[WARN] Exception during execution of the LDAP query. Message - %s", err.Error())
+				}
+
+				if id == "" {
+					addResponse(fmt.Sprintf("ERR"))
+				} else {
+					addResponse(fmt.Sprintf("%s ERR", id))
+				}
 			} else {
-				addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
+				if len(sr.Entries) > 0 {
+					if id == "" {
+						addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
+					} else {
+						addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
+					}
+				} else {
+					if id == "" {
+						addResponse(fmt.Sprintf("ERR"))
+					} else {
+						addResponse(fmt.Sprintf("%s ERR", id))
+					}
+				}
 			}
 		} else {
+			log.Printf("[WARN] Exception during execution of the LDAP query. User '%s' is not found in domain. Using LDAP path - %s", username, opts.BaseDN)
 			if id == "" {
 				addResponse(fmt.Sprintf("ERR"))
 			} else {
 				addResponse(fmt.Sprintf("%s ERR", id))
 			}
-		}
-	} else {
-		log.Printf("[WARN] Exception during execution of the LDAP query. User '%s' is not found in domain. Using LDAP path - %s", username, opts.BaseDN)
-		if id == "" {
-			addResponse(fmt.Sprintf("ERR"))
-		} else {
-			addResponse(fmt.Sprintf("%s ERR", id))
 		}
 	}
 }
