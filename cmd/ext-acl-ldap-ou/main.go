@@ -79,7 +79,7 @@ func startChecker() {
 		os.Exit(1)
 	}
 
-	ldapConnPool, err = ldappool.NewChannelPool(0, len(opts.ServerSlice), serverpool, opts.UseTLS, []uint8{ldap.LDAPResultTimeLimitExceeded, ldap.ErrorNetwork, ldap.LDAPResultInvalidCredentials})
+	ldapConnPool, err = ldappool.NewChannelPool(0, 10*len(opts.ServerSlice), serverpool, opts.UseTLS, []uint8{ldap.LDAPResultTimeLimitExceeded, ldap.ErrorNetwork, ldap.LDAPResultInvalidCredentials})
 	if err != nil {
 		log.Fatalf("[ERROR] Cannot create LDAP connection pool. Message - %s", err.Error())
 		os.Exit(1)
