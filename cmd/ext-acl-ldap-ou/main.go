@@ -11,12 +11,12 @@ import (
 	"syscall"
 
 	"github.com/jessevdk/go-flags"
+	"github.com/verdel/go-ext-acl-ldap-helper/internal/ldap.v2"
 	"github.com/verdel/go-ext-acl-ldap-helper/internal/ldappool"
-	"gopkg.in/ldap.v2"
 )
 
 const (
-	version = "0.0.1"
+	version = "0.0.2"
 )
 
 var (

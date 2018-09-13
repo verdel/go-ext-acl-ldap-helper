@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"gopkg.in/ldap.v2"
+	"github.com/verdel/go-ext-acl-ldap-helper/internal/ldap.v2"
 )
 
 // PoolConn implements Client to override the Close() method

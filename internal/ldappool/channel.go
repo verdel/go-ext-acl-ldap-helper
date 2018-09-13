@@ -3,10 +3,11 @@ package ldappool
 import (
 	"crypto/tls"
 	"errors"
-	"gopkg.in/ldap.v2"
 	"log"
 	"sync"
 	"time"
+
+	"github.com/verdel/go-ext-acl-ldap-helper/internal/ldap.v2"
 )
 
 // channelPool implements the Pool interface based on buffered channels.
