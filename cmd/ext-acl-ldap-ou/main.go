@@ -147,6 +147,7 @@ func doRequest(id, username string, searchEntity string) {
 		} else {
 			log.Printf("[WARN] LDAP binding operation error. Error - %s", err.Error())
 		}
+		conn.MarkUnusable()
 		return
 	}
 	defer conn.Close()
