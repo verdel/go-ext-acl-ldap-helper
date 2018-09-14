@@ -116,7 +116,7 @@ func (c *channelPool) NewConn(useTLS bool) (*PoolConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	conn.SetTimeout(time.Duration(100) * time.Millisecond)
+	conn.SetTimeout(time.Duration(300) * time.Millisecond)
 	return c.wrapConn(conn, c.closeAt), nil
 }
 
