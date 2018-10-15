@@ -9,14 +9,16 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/jessevdk/go-flags"
+	cache "github.com/patrickmn/go-cache"
 	"github.com/verdel/go-ext-acl-ldap-helper/internal/ldap.v2"
 	"github.com/verdel/go-ext-acl-ldap-helper/internal/ldappool"
 )
 
 const (
-	version = "0.0.3"
+	version = "0.0.4"
 )
 
 var (
@@ -27,20 +29,22 @@ var (
 	stdinLineChan       chan string    = make(chan string, 100)
 	lastUsedIndex       int
 	ldapConnPool        ldappool.Pool
+	c                   = cache.New(300*time.Second, 30*time.Second)
 )
 
 var opts struct {
-	ServerSlice  []string `short:"s" long:"server" description:"Domain controller server address (required)" required:"true"`
-	ServerPort   int      `short:"p" long:"port" description:"Domain controller LDAP service port (default: 389)" default:"389"`
-	UseTLS       bool     `long:"tls" description:"Using LDAP over TLS"`
-	BindUsername string   `short:"u" long:"binduser" description:"Username for LDAP Bind operation (required)" required:"true"`
-	BindPassword string   `short:"w" long:"bindpassword" description:"Password for LDAP Bind operation"`
-	PwdFile      string   `short:"f" long:"pwdfile" description:"File with password for Bind operation"`
-	BaseDN       string   `short:"b" long:"basedn" description:"BaseDN for user search process. %ou = OU (required)" required:"true"`
-	Filter       string   `long:"filter" description:"User search filter pattern. %u = login (required)" required:"true"`
-	StripRealm   bool     `long:"strip-realm" description:"Strip Kerberos Realm from usernames"`
-	StripDomain  bool     `long:"strip-domain" description:"Strip NT domain from usernames"`
-	LogFile      string   `long:"log" description:"Path to log file (default: /var/log/squid-ext-acl-ldap.log)" default:"/var/log/squid-ext-acl-ldap.log"`
+	ServerSlice     []string `short:"s" long:"server" description:"Domain controller server address (required)" required:"true"`
+	ServerPort      int      `short:"p" long:"port" description:"Domain controller LDAP service port (default: 389)" default:"389"`
+	UseTLS          bool     `long:"tls" description:"Using LDAP over TLS"`
+	BindUsername    string   `short:"u" long:"binduser" description:"Username for LDAP Bind operation (required)" required:"true"`
+	BindPassword    string   `short:"w" long:"bindpassword" description:"Password for LDAP Bind operation"`
+	PwdFile         string   `short:"f" long:"pwdfile" description:"File with password for Bind operation"`
+	BaseDN          string   `short:"b" long:"basedn" description:"BaseDN for user search process. %ou = OU (required)" required:"true"`
+	Filter          string   `long:"filter" description:"User search filter pattern. %u = login (required)" required:"true"`
+	StripRealm      bool     `long:"strip-realm" description:"Strip Kerberos Realm from usernames"`
+	StripDomain     bool     `long:"strip-domain" description:"Strip NT domain from usernames"`
+	CacheExpiration int      `long:"cache" description:"Use in-memory cache. Set entry expiration time in seconds"`
+	LogFile         string   `long:"log" description:"Path to log file (default: /var/log/squid-ext-acl-ldap.log)" default:"/var/log/squid-ext-acl-ldap.log"`
 }
 
 func isInt(s string) bool {
@@ -132,6 +136,32 @@ scanloop:
 }
 
 func doRequest(id, username string, searchEntity string) {
+	if opts.StripRealm {
+		username = strings.Split(username, "@")[0]
+	}
+	if opts.StripDomain && strings.Contains(username, "\\") {
+		username = strings.Split(username, "\\")[1]
+	}
+
+	if opts.CacheExpiration != 0 {
+		searchResult, cacheFound := c.Get(fmt.Sprintf("%s:%s", username, searchEntity))
+		if cacheFound {
+			if searchResult == 1 {
+				if id == "" {
+					addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
+				} else {
+					addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
+				}
+			} else {
+				if id == "" {
+					addResponse(fmt.Sprintf("ERR"))
+				} else {
+					addResponse(fmt.Sprintf("%s ERR", id))
+				}
+			}
+			return
+		}
+	}
 
 	conn, err := ldapConnPool.Get()
 	if err != nil {
@@ -151,13 +181,6 @@ func doRequest(id, username string, searchEntity string) {
 		return
 	}
 	defer conn.Close()
-
-	if opts.StripRealm {
-		username = strings.Split(username, "@")[0]
-	}
-	if opts.StripDomain && strings.Contains(username, "\\") {
-		username = strings.Split(username, "\\")[1]
-	}
 
 	searchRequest := ldap.NewSearchRequest(
 		strings.Replace(opts.BaseDN, "%ou", searchEntity, -1),
@@ -181,6 +204,10 @@ func doRequest(id, username string, searchEntity string) {
 		}
 	} else {
 		if len(sr.Entries) > 0 {
+			if opts.CacheExpiration != 0 {
+				c.Set(fmt.Sprintf("%s:%s", username, searchEntity), 1, time.Duration(opts.CacheExpiration)*time.Second)
+			}
+
 			if id == "" {
 				addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
 			} else {
@@ -188,6 +215,10 @@ func doRequest(id, username string, searchEntity string) {
 			}
 
 		} else {
+			if opts.CacheExpiration != 0 {
+				c.Set(fmt.Sprintf("%s:%s", username, searchEntity), 0, time.Duration(opts.CacheExpiration)*time.Second)
+			}
+
 			if id == "" {
 				addResponse(fmt.Sprintf("ERR"))
 			} else {
