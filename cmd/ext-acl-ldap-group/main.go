@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	version = "0.0.4"
+	version = "0.0.5"
 )
 
 var (
@@ -136,6 +136,22 @@ scanloop:
 	rewriterExitChan <- 1
 }
 
+func printPositiveResult(id, searchEntity string) {
+	if id == "" {
+		addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
+	} else {
+		addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
+	}
+}
+
+func printNegativeResult(id string) {
+	if id == "" {
+		addResponse(fmt.Sprintf("ERR"))
+	} else {
+		addResponse(fmt.Sprintf("%s ERR", id))
+	}
+}
+
 func doRequest(id, username string, searchEntity string) {
 	if opts.StripRealm {
 		username = strings.Split(username, "@")[0]
@@ -148,17 +164,9 @@ func doRequest(id, username string, searchEntity string) {
 		searchResult, cacheFound := c.Get(fmt.Sprintf("%s:%s", username, searchEntity))
 		if cacheFound {
 			if searchResult == 1 {
-				if id == "" {
-					addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
-				} else {
-					addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
-				}
+				printPositiveResult(id, searchEntity)
 			} else {
-				if id == "" {
-					addResponse(fmt.Sprintf("ERR"))
-				} else {
-					addResponse(fmt.Sprintf("%s ERR", id))
-				}
+				printNegativeResult(id)
 			}
 			return
 		}
@@ -167,6 +175,7 @@ func doRequest(id, username string, searchEntity string) {
 	conn, err := ldapConnPool.Get()
 	if err != nil {
 		log.Fatal("[ERROR] Cannot get active LDAP connection")
+		printNegativeResult(id)
 	}
 
 	err = conn.Bind(opts.BindUsername, opts.BindPassword)
@@ -177,6 +186,7 @@ func doRequest(id, username string, searchEntity string) {
 		} else {
 			log.Printf("[WARN] LDAP binding operation error. Message - %s", err.Error())
 		}
+		printNegativeResult(id)
 		return
 	}
 	defer conn.Close()
@@ -195,12 +205,8 @@ func doRequest(id, username string, searchEntity string) {
 		} else {
 			log.Printf("[WARN] Exception during execution of the LDAP query. Message - %s", err.Error())
 		}
-
-		if id == "" {
-			addResponse(fmt.Sprintf("ERR"))
-		} else {
-			addResponse(fmt.Sprintf("%s ERR", id))
-		}
+		printNegativeResult(id)
+		return
 	} else {
 		if len(sr.Entries) == 1 {
 			r := strings.NewReplacer("%u", sr.Entries[0].DN,
@@ -222,41 +228,29 @@ func doRequest(id, username string, searchEntity string) {
 					log.Printf("[WARN] Exception during execution of the LDAP query. Message - %s", err.Error())
 				}
 
-				if id == "" {
-					addResponse(fmt.Sprintf("ERR"))
-				} else {
-					addResponse(fmt.Sprintf("%s ERR", id))
-				}
+				printNegativeResult(id)
+				return
 			} else {
 				if len(sr.Entries) > 0 {
 					if opts.CacheExpiration != 0 {
 						c.Set(fmt.Sprintf("%s:%s", username, searchEntity), 1, time.Duration(opts.CacheExpiration)*time.Second)
 					}
 
-					if id == "" {
-						addResponse(fmt.Sprintf("OK tag=%s", searchEntity))
-					} else {
-						addResponse(fmt.Sprintf("%s OK tag=%s", id, searchEntity))
-					}
+					printPositiveResult(id, searchEntity)
+					return
 				} else {
 					if opts.CacheExpiration != 0 {
 						c.Set(fmt.Sprintf("%s:%s", username, searchEntity), 0, time.Duration(opts.CacheExpiration)*time.Second)
 					}
 
-					if id == "" {
-						addResponse(fmt.Sprintf("ERR"))
-					} else {
-						addResponse(fmt.Sprintf("%s ERR", id))
-					}
+					printNegativeResult(id)
+					return
 				}
 			}
 		} else {
 			log.Printf("[WARN] Exception during execution of the LDAP query. User '%s' is not found in domain. Using LDAP path - %s", username, opts.BaseDN)
-			if id == "" {
-				addResponse(fmt.Sprintf("ERR"))
-			} else {
-				addResponse(fmt.Sprintf("%s ERR", id))
-			}
+			printNegativeResult(id)
+			return
 		}
 	}
 }
