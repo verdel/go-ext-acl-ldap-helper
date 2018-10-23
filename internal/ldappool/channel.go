@@ -13,7 +13,7 @@ import (
 // channelPool implements the Pool interface based on buffered channels.
 type channelPool struct {
 	// storage for our net.Conn connections
-	mu         sync.Mutex
+	mu         sync.RWMutex
 	conns      chan ldap.Client
 	name       string
 	serverPool *serverPool
@@ -62,9 +62,9 @@ func NewChannelPool(initialCap, maxCap int, servers *serverPool, useTLS bool, cl
 }
 
 func (c *channelPool) getConns() chan ldap.Client {
-	c.mu.Lock()
+	c.mu.RLock()
 	conns := c.conns
-	c.mu.Unlock()
+	c.mu.RUnlock()
 	return conns
 }
 
@@ -128,8 +128,8 @@ func (c *channelPool) put(conn ldap.Client) {
 		return
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
 	if c.conns == nil {
 		// pool is closed, close passed connection
@@ -150,10 +150,10 @@ func (c *channelPool) put(conn ldap.Client) {
 }
 
 func (c *channelPool) Close() {
-	c.mu.Lock()
+	c.mu.RLock()
 	conns := c.conns
 	c.conns = nil
-	c.mu.Unlock()
+	c.mu.RUnlock()
 
 	if conns == nil {
 		return
