@@ -173,7 +173,7 @@ func doRequest(id, username string, searchEntity string) {
 
 	conn, err := ldapConnPool.Get()
 	if err != nil {
-		log.Fatalln("[ERROR] Cannot get active LDAP connection")
+		log.Printf("[ERROR] Cannot get active LDAP connection. Error - %s", err.Error())
 		printNegativeResult(id)
 		return
 	}
